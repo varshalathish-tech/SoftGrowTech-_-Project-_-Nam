@@ -1,0 +1,135 @@
+Project 1 - Sales Data Dashboard
+SoftGrowTech Internship - Data Analysis Task 1
+
+Description:
+    Analyzes a sales dataset and produces a 4-panel dashboard covering
+    revenue trends, product performance, regional performance, and
+    top sales days. Prints key business insights to the console.
+
+Tools Used: Python (pandas, matplotlib)
+
+Usage:
+    python sales_dashboard.py
+    (Reads sales_data.csv from the same folder; generates a sample
+    dataset automatically if the file is not found.)
+"""
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+DATA_FILE = "sales_data.csv"
+OUTPUT_IMAGE = "sales_dashboard.png"
+
+
+def generate_sample_data(path=DATA_FILE, seed=42):
+    """Create a synthetic year of sales data if no real dataset is supplied."""
+    np.random.seed(seed)
+
+    dates = pd.date_range("2024-01-01", "2024-12-31", freq="D")
+    regions = ["North", "South", "East", "West"]
+    products = ["Widget A", "Widget B", "Widget C", "Widget D", "Widget E"]
+    base_prices = {"Widget A": 25, "Widget B": 40, "Widget C": 15,
+                   "Widget D": 60, "Widget E": 100}
+
+    rows = []
+    for date in dates:
+        n_orders = np.random.randint(3, 10)
+        for _ in range(n_orders):
+            product = np.random.choice(products, p=[0.30, 0.25, 0.20, 0.15, 0.10])
+            region = np.random.choice(regions)
+            qty = np.random.randint(1, 6)
+            seasonal = 1.4 if date.month in (11, 12) else 1.0  # holiday boost
+            revenue = round(base_prices[product] * qty * seasonal
+                             * np.random.uniform(0.9, 1.1), 2)
+            rows.append([date, region, product, qty, revenue])
+
+    df = pd.DataFrame(rows, columns=["Date", "Region", "Product", "Quantity", "Revenue"])
+    df.to_csv(path, index=False)
+    return df
+
+
+def load_data(path=DATA_FILE):
+    """Load sales data from CSV, generating a sample file if missing."""
+    if not os.path.exists(path):
+        print(f"'{path}' not found — generating a sample dataset instead.")
+        return generate_sample_data(path)
+    return pd.read_csv(path, parse_dates=["Date"])
+
+
+def clean_data(df):
+    """Basic cleaning: drop nulls/duplicates, enforce correct dtypes."""
+    df = df.drop_duplicates()
+    df = df.dropna(subset=["Date", "Region", "Product", "Quantity", "Revenue"])
+    df["Date"] = pd.to_datetime(df["Date"])
+    df["Quantity"] = df["Quantity"].astype(int)
+    df["Revenue"] = df["Revenue"].astype(float)
+    return df
+
+
+def build_dashboard(df, output_path=OUTPUT_IMAGE):
+    """Create and save a 4-panel sales dashboard."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle("Sales Data Dashboard", fontsize=18, fontweight="bold")
+
+    # 1. Monthly revenue trend
+    monthly = df.set_index("Date").resample("ME")["Revenue"].sum()
+    axes[0, 0].plot(monthly.index, monthly.values, marker="o",
+                     color="#2563eb", linewidth=2)
+    axes[0, 0].set_title("Monthly Revenue Trend")
+    axes[0, 0].set_ylabel("Revenue ($)")
+    axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+    axes[0, 0].grid(alpha=0.3)
+
+    # 2. Revenue by product
+    prod_rev = df.groupby("Product")["Revenue"].sum().sort_values(ascending=False)
+    axes[0, 1].bar(prod_rev.index, prod_rev.values, color="#16a34a")
+    axes[0, 1].set_title("Revenue by Product")
+    axes[0, 1].set_ylabel("Revenue ($)")
+    axes[0, 1].tick_params(axis="x", rotation=30)
+
+    # 3. Revenue share by region
+    region_rev = df.groupby("Region")["Revenue"].sum()
+    axes[1, 0].pie(region_rev.values, labels=region_rev.index, autopct="%1.1f%%",
+                    colors=["#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6"])
+    axes[1, 0].set_title("Revenue Share by Region")
+
+    # 4. Top 5 sales days
+    daily = df.groupby("Date")["Revenue"].sum().sort_values(ascending=False).head(5)
+    axes[1, 1].barh([d.strftime("%b %d") for d in daily.index], daily.values,
+                     color="#dc2626")
+    axes[1, 1].set_title("Top 5 Sales Days")
+    axes[1, 1].set_xlabel("Revenue ($)")
+    axes[1, 1].invert_yaxis()
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig(output_path, dpi=150)
+    print(f"Dashboard saved to {output_path}")
+
+    return monthly, prod_rev, region_rev
+
+
+def print_insights(df, monthly, prod_rev, region_rev):
+    """Print key business insights derived from the data."""
+    print("\n--- KEY INSIGHTS ---")
+    print(f"Total Revenue: ${df['Revenue'].sum():,.2f}")
+    print(f"Total Orders: {len(df)}")
+    print(f"Best Month: {monthly.idxmax().strftime('%B')} "
+          f"(${monthly.max():,.2f})")
+    print(f"Top Product: {prod_rev.index[0]} (${prod_rev.iloc[0]:,.2f})")
+    top_region = region_rev.idxmax()
+    print(f"Top Region: {top_region} (${region_rev.max():,.2f}, "
+          f"{region_rev.max() / region_rev.sum() * 100:.1f}% of total)")
+
+
+def main():
+    df = load_data()
+    df = clean_data(df)
+    monthly, prod_rev, region_rev = build_dashboard(df)
+    print_insights(df, monthly, prod_rev, region_rev)
+
+
+if __name__ == "__main__":
+    main()
